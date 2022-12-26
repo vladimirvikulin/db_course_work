@@ -276,3 +276,215 @@ SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
 
 ## RESTfull сервіс для управління даними
 
+### Кореневий файл серверу
+```js
+
+const express = require('express');
+const bodyParser = require('body-parser');
+const connection = require('./db/config')
+const port = 8080;
+const app = express();
+connection.connect();
+app.use(bodyParser.text());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use('/user', require('./controls/routes'));
+
+app.listen(port, () => {
+  console.log(`Server starts on http://localhost:${port}`);
+});
+
+```
+
+### Файл контролерів, які оброблюють запити
+```js
+
+const {Router} = require('express');
+const router = Router();
+const {v4: uuid} = require('uuid');
+const {decode} = require('../utils/decode');
+const connection = require('../db/config');
+router.get('/', (req, res) => {
+    connection.query('select * from user', (err, users) => {
+      if (err) {
+        res.status(500).json({
+          message: 'Error on server. Try later',
+        });
+        return;
+      }
+      const convertedData = users.map(({
+        id,
+        email,
+        username,
+        avatar,
+      }) => ({
+        id: decode(id),
+        email,
+        username,
+        avatar,
+      }));
+  
+      res.status(200).json({
+        data: convertedData,
+      });
+    });
+  });
+  
+  router.get('/:id', (req, res) => {
+    const {id} = req.params;
+    connection.query(`select * from user where id = unhex("${id}")`, (err, [user]) => {
+      if (err) {
+        res.status(500).json({
+          message: 'Error on server. Try later',
+        });
+        return;
+      }
+  
+      if (!user) {
+        res.status(404).json({
+          message: 'Project was not found. Check the id',
+        });
+        return;
+      }
+  
+      res.status(200).json({
+        data: {
+          ...user,
+          id: decode(user.id),
+        },
+      });
+    });
+  });
+  
+  router.post('/', (req, res) => {
+    const id = uuid().replaceAll('-', '');
+    const {email, username, avatar} = req.body;
+    if (!(email && username && avatar)) {
+      res.status(400).json({
+        message: 'All fields are required',
+      });
+      return;
+    }
+  
+    connection.query(
+      `insert into user (
+          id,
+          email, 
+          username, 
+          avatar
+        ) values (
+          unhex("${id}"),
+          "${email}",
+          "${username}",
+          "${avatar}"
+        )`,
+      (err, result) => {
+        if (err) {
+          res.status(500).json({
+            message: 'Error on server. Try later',
+          });
+          return;
+        }
+  
+        res.status(200).send(
+          `Succesfully added user with id = ${id}`
+        );
+      }
+    );
+  });
+  
+  router.put('/:id', (req, res) => {
+    const {id} = req.params;
+    connection.query(`select * from user where id = unhex("${id}")`, (err, [user]) => {
+      if (err) {
+        res.status(500).json({
+          message: 'Error on server. Try later',
+        });
+        return;
+      }
+  
+      if (!user) {
+        res.status(404).json({
+          message: 'Project was not found. Check the id',
+        });
+        return;
+      }
+  
+      const {
+        email,
+        username,
+        avatar
+      } = {
+        ...user,
+        ...req.body
+      };
+  
+      connection.query(
+        `update user set 
+          email = "${email}", 
+          username = "${username}",
+          avatar = "${avatar}"
+          where id = unhex("${id}")`,
+        (err, result) => {
+          if (err) {
+            console.log(err)
+            res.status(500).json({
+              message: 'Error on server. Try later',
+            });
+            return;
+          }
+  
+          res.status(200).send(
+            `Succesfully updated user with id = ${id}`
+          );
+        }
+      );
+    });
+  });
+  
+  router.delete('/:id', (req, res) => {
+    const {id} = req.params;
+    connection.query(`delete from user where id = unhex("${id}")`, (err, result) => {
+      if (err) {
+        res.status(500).json({
+          message: 'Error on server. Try later',
+        });
+        return;
+      }
+  
+      res.status(200).send(
+        `Succesfully deleted user with id = ${id}`
+      );
+    });
+  });
+  
+module.exports = router;
+
+```
+
+### Файл підключення до бази даних
+```js
+
+const mysql = require('mysql2');
+
+const connection = mysql.createConnection({
+  host: 'localhost',
+  user: 'user',
+  password: 'user',
+  database: 'imbaza',
+});
+
+module.exports = connection;
+
+```
+
+### Файл допоміжних функцій
+```js
+
+const decode = (Buffer) => {
+    return Buffer.toString('hex');
+  };
+  
+  module.exports = { decode };
+
+```
