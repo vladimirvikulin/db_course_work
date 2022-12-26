@@ -6,4 +6,4 @@
 
 * [Володимир ВІКУЛІН](https://t.me/vladlm1r)
 
-**[Посилання на проект](https://vladimirvikulin.github.io/db_course_work/)**
+**[Посилання на проект](https://just-hoshinon.github.io/db_course_work/)**
